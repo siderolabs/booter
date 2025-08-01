@@ -1,0 +1,64 @@
+kind: golang.Generate
+spec:
+  versionPackagePath: internal/version
+---
+kind: custom.Step
+name: ipxe
+spec:
+  docker:
+    enabled: true
+    stages:
+      - name: ipxe-linux-amd64
+        from: ghcr.io/siderolabs/ipxe:v1.11.0
+        platform: linux/amd64
+      - name: ipxe-linux-arm64
+        from: ghcr.io/siderolabs/ipxe:v1.11.0
+        platform: linux/arm64
+---
+kind: auto.CustomSteps
+spec:
+  steps:
+    - name: ipxe
+      toplevel: true
+---
+kind: common.Image
+name: image-booter
+spec:
+  pushLatest: false
+  extraEnvironment:
+    PLATFORM: linux/amd64,linux/arm64
+  copyFrom:
+    - stage: ghcr.io/siderolabs/musl:v1.11.0 # required by zbin
+      source: /
+      destination: /
+      name: musl
+    - stage: ghcr.io/siderolabs/liblzma:v1.11.0 # required by zbin
+      source: /
+      destination: /
+      name: liblzma
+    - stage: ghcr.io/siderolabs/ipxe:v1.11.0
+      source: /usr/libexec/zbin
+      destination: /usr/bin/zbin
+      name: ipxe
+    - stage: ipxe-linux-amd64
+      source: /usr/libexec/
+      destination: /var/lib/ipxe/amd64
+      name: ipxe-linux-amd64
+    - stage: ipxe-linux-arm64
+      source: /usr/libexec/
+      destination: /var/lib/ipxe/arm64
+      name: ipxe-linux-arm64
+---
+kind: golang.Build
+spec:
+  outputs:
+    linux-amd64:
+      GOOS: linux
+      GOARCH: amd64
+    linux-arm64:
+      GOOS: linux
+      GOARCH: arm64
+---
+kind: service.CodeCov
+spec:
+  enabled: false
