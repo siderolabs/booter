@@ -1,6 +1,6 @@
 module github.com/siderolabs/booter
 
-go 1.24.5
+go 1.25.3
 
 replace (
 	github.com/pin/tftp/v3 => github.com/utkuozdemir/pin-tftp/v3 v3.0.0-20241021135417-0dd7dba351ad

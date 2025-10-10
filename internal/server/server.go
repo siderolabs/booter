@@ -98,6 +98,7 @@ func (s *Server) Run(ctx context.Context) error {
 		Extensions:          s.options.Extensions,
 		ExtraKernelArgs:     s.options.ExtraKernelArgs,
 		TalosVersion:        s.options.TalosVersion,
+		SchematicID:         s.options.SchematicID,
 	}, s.logger.With(zap.String("component", "ipxe_handler")))
 	if err != nil {
 		return fmt.Errorf("failed to create iPXE handler: %w", err)

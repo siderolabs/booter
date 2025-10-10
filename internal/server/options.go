@@ -15,6 +15,7 @@ type Options struct {
 	DHCPProxyIfaceOrIP     string
 	TalosVersion           string
 	ExtraKernelArgs        string
+	SchematicID            string
 	Extensions             []string
 	Omni                   omni.Options
 	APIPort                int

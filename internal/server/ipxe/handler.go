@@ -37,7 +37,8 @@ chain --replace %s
 
 // ImageFactoryClient represents an image factory client which ensures a schematic exists on image factory, and returns the PXE URL to it.
 type ImageFactoryClient interface {
-	SchematicIPXEURL(ctx context.Context, talosVersion, arch string, extensions, extraKernelArgs []string) (string, error)
+	EnsureSchematic(ctx context.Context, extensions, extraKernelArgs []string) (string, error)
+	GetIPXEURL(schematicID, talosVersion, arch string) (string, error)
 }
 
 // HandlerOptions represents the options for the iPXE handler.
@@ -45,6 +46,7 @@ type HandlerOptions struct {
 	APIAdvertiseAddress string
 	TalosVersion        string
 	ExtraKernelArgs     string
+	SchematicID         string
 	Extensions          []string
 	APIPort             int
 }
@@ -93,9 +95,12 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// TODO: later, we can do per-machine kernel args and system extensions here
 
-	kernelArgs := slices.Concat(handler.kernelArgs, handler.consoleKernelArgs(arch))
+	consoleKernelArgs := handler.consoleKernelArgs(arch)
+	kernelArgs := slices.Concat(handler.kernelArgs, consoleKernelArgs)
 
-	body, statusCode, err := handler.bootViaFactoryIPXEScript(ctx, handler.options.TalosVersion, arch, handler.options.Extensions, kernelArgs)
+	logger.Debug("injected console kernel args to the iPXE request", zap.Strings("console_kernel_args", consoleKernelArgs))
+
+	body, statusCode, err := handler.bootViaFactoryIPXEScript(ctx, arch, kernelArgs)
 	if err != nil {
 		handler.logger.Error("failed to get iPXE script", zap.Error(err))
 
@@ -123,9 +128,18 @@ func (handler *Handler) handleInitScript(w http.ResponseWriter) {
 	}
 }
 
-func (handler *Handler) bootViaFactoryIPXEScript(ctx context.Context, talosVersion, arch string, extensions, kernelArgs []string) (body string, statusCode int, err error) {
-	ipxeURL, err := handler.imageFactoryClient.SchematicIPXEURL(ctx, talosVersion, arch, extensions, kernelArgs)
-	if err != nil {
+func (handler *Handler) bootViaFactoryIPXEScript(ctx context.Context, arch string, kernelArgs []string) (body string, statusCode int, err error) {
+	schematicID := handler.options.SchematicID
+
+	if schematicID == "" {
+		if schematicID, err = handler.imageFactoryClient.EnsureSchematic(ctx, handler.options.Extensions, kernelArgs); err != nil {
+			return "", http.StatusInternalServerError, fmt.Errorf("failed to get schematic IPXE URL: %w", err)
+		}
+	}
+
+	var ipxeURL string
+
+	if ipxeURL, err = handler.imageFactoryClient.GetIPXEURL(schematicID, handler.options.TalosVersion, arch); err != nil {
 		return "", http.StatusInternalServerError, fmt.Errorf("failed to get schematic IPXE URL: %w", err)
 	}
 
@@ -145,6 +159,21 @@ func (handler *Handler) consoleKernelArgs(arch string) []string {
 
 // NewHandler creates a new iPXE server.
 func NewHandler(ctx context.Context, configServerEnabled bool, imageFactoryClient ImageFactoryClient, options HandlerOptions, logger *zap.Logger) (*Handler, error) {
+	apiHostPort := net.JoinHostPort(options.APIAdvertiseAddress, strconv.Itoa(options.APIPort))
+	talosConfigURL := fmt.Sprintf("http://%s/config?u=${uuid}", apiHostPort)
+	talosConfigKernelArg := fmt.Sprintf("%s=%s", constants.KernelParamConfig, talosConfigURL)
+
+	if options.SchematicID != "" {
+		if len(options.Extensions) > 0 || len(options.ExtraKernelArgs) > 0 {
+			return nil, fmt.Errorf("schematicID cannot be used with extensions or extraKernelArgs")
+		}
+
+		if configServerEnabled {
+			logger.Sugar().Warnf("schematic ID is set explicitly to %q and the config server is enabled (e.g., Omni connection is requested), "+
+				"note that if this schematic does not contain the kernel arg %q, the machines will not be able to connect to the config server", options.SchematicID, talosConfigKernelArg)
+		}
+	}
+
 	initScript, err := buildInitScript(options.APIAdvertiseAddress, options.APIPort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build init script: %w", err)
@@ -161,10 +190,9 @@ func NewHandler(ctx context.Context, configServerEnabled bool, imageFactoryClien
 	kernelArgs := strings.Fields(options.ExtraKernelArgs)
 
 	if configServerEnabled {
-		apiHostPort := net.JoinHostPort(options.APIAdvertiseAddress, strconv.Itoa(options.APIPort))
-		talosConfigURL := fmt.Sprintf("http://%s/config?u=${uuid}", apiHostPort)
+		kernelArgs = append(kernelArgs, talosConfigKernelArg)
 
-		kernelArgs = append(kernelArgs, fmt.Sprintf("%s=%s", constants.KernelParamConfig, talosConfigURL))
+		logger.Debug("injected talos config kernel arg to the iPXE requests", zap.String("arg", talosConfigKernelArg))
 	}
 
 	return &Handler{

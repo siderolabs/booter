@@ -137,6 +137,8 @@ func init() {
 	rootCmd.Flags().BoolVar(&serverOptions.DisableDHCPProxy, "disable-dhcp-proxy", serverOptions.DisableDHCPProxy,
 		"Disable the DHCP proxy server.")
 
+	rootCmd.Flags().StringVar(&serverOptions.SchematicID, "schematic-id", serverOptions.SchematicID,
+		"The ID of the schematic to use.")
 	rootCmd.Flags().StringSliceVar(&serverOptions.Extensions, "extensions", serverOptions.Extensions,
 		"List of Talos extensions to use. The extensions will be used to generate schematic ID from the image factory.")
 	rootCmd.Flags().StringVarP(&serverOptions.ExtraKernelArgs, extraKernelArgsFlag, "k", serverOptions.ExtraKernelArgs,

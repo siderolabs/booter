@@ -37,18 +37,11 @@ func NewClient(baseURL, pxeBaseURL string, secureBootEnabled bool, logger *zap.L
 	}, nil
 }
 
-// SchematicIPXEURL ensures a schematic exists on the image factory and returns the iPXE URL to it.
-//
-// If agentMode is true, the schematic will be created with the firmware extensions and the metal-agent extension.
-func (c *Client) SchematicIPXEURL(ctx context.Context, talosVersion, arch string, extensions, extraKernelArgs []string) (string, error) {
-	logger := c.logger.With(zap.String("talos_version", talosVersion), zap.String("arch", arch),
-		zap.Strings("extensions", extensions), zap.Strings("extra_kernel_args", extraKernelArgs))
+// EnsureSchematic ensures a schematic exists on the image factory and returns its ID.
+func (c *Client) EnsureSchematic(ctx context.Context, extensions, extraKernelArgs []string) (string, error) {
+	logger := c.logger.With(zap.Strings("extensions", extensions), zap.Strings("extra_kernel_args", extraKernelArgs))
 
-	logger.Debug("generate schematic iPXE URL")
-
-	if talosVersion == "" {
-		return "", fmt.Errorf("talosVersion is required")
-	}
+	logger.Debug("ensure schematic")
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -74,12 +67,28 @@ func (c *Client) SchematicIPXEURL(ctx context.Context, talosVersion, arch string
 		return "", fmt.Errorf("failed to create schematic: %w", err)
 	}
 
+	return schematicID, nil
+}
+
+// GetIPXEURL returns the iPXE URL for the given schematic ID, Talos version, and architecture.
+func (c *Client) GetIPXEURL(schematicID, talosVersion, arch string) (string, error) {
+	if schematicID == "" {
+		return "", fmt.Errorf("schematic ID is required")
+	}
+
+	if talosVersion == "" {
+		return "", fmt.Errorf("talos version is required")
+	}
+
+	if arch == "" {
+		return "", fmt.Errorf("arch is required")
+	}
+
 	ipxeURL := fmt.Sprintf("%s/pxe/%s/%s/metal-%s", c.pxeBaseURL, schematicID, talosVersion, arch)
+
 	if c.secureBootEnabled {
 		ipxeURL += "-secureboot"
 	}
-
-	logger.Debug("generated schematic iPXE URL", zap.String("ipxe_url", ipxeURL))
 
 	return ipxeURL, nil
 }
