@@ -29,7 +29,5 @@ func DefaultOptions() Options {
 		ImageFactoryBaseURL:    "https://factory.talos.dev",
 		ImageFactoryPXEBaseURL: "https://pxe.factory.talos.dev",
 		APIPort:                50084,
-		Extensions:             []string{"siderolabs/hello-world-service"},
-		TalosVersion:           "v1.10.6",
 	}
 }

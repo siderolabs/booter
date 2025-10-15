@@ -147,7 +147,8 @@ func init() {
 			"The arguments will be used to generate schematic ID from the image factory. "+
 			"These extra args can also be set via the %q environment variable or via command line arguments.", extraKernelArgsEnvVar))
 
-	rootCmd.Flags().StringVar(&serverOptions.TalosVersion, "talos-version", serverOptions.TalosVersion, "The Talos version to use.")
+	rootCmd.Flags().StringVar(&serverOptions.TalosVersion, "talos-version", serverOptions.TalosVersion, "The Talos version to use. If it is not specified, "+
+		"the latest stable Talos version from the image factory will be detected and used.")
 
 	// Omni options
 	// todo: disabled for now, we can re-enable it after https://github.com/siderolabs/omni/issues/1375 for better UX

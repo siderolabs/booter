@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/blang/semver/v4"
 	"github.com/siderolabs/image-factory/pkg/client"
 	"github.com/siderolabs/image-factory/pkg/schematic"
 	"go.uber.org/zap"
@@ -91,4 +92,37 @@ func (c *Client) GetIPXEURL(schematicID, talosVersion, arch string) (string, err
 	}
 
 	return ipxeURL, nil
+}
+
+// GetLatestStableVersion returns the latest stable Talos version from the image factory.
+func (c *Client) GetLatestStableVersion(ctx context.Context) (string, error) {
+	versions, err := c.factoryClient.Versions(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	var latestStable *semver.Version
+	for _, v := range versions {
+		sv, err := semver.ParseTolerant(v)
+		if err != nil {
+			c.logger.Warn("failed to parse version", zap.String("version", v), zap.Error(err))
+
+			continue
+		}
+
+		// Skip pre-releases
+		if len(sv.Pre) > 0 {
+			continue
+		}
+
+		if latestStable == nil || sv.GT(*latestStable) {
+			latestStable = &sv
+		}
+	}
+
+	if latestStable == nil {
+		return "", fmt.Errorf("no stable versions found")
+	}
+
+	return latestStable.String(), nil
 }

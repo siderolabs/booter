@@ -92,6 +92,15 @@ func (s *Server) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to create image factory client: %w", err)
 	}
 
+	if s.options.TalosVersion == "" {
+		if s.options.TalosVersion, err = imageFactoryClient.GetLatestStableVersion(ctx); err != nil {
+			return fmt.Errorf("failed to get the latest stable Talos version from the image factory: %w", err)
+		}
+
+		s.logger.Info("Talos version is not explicitly defined, the latest stable Talos version from the image factory will be used",
+			zap.String("version", s.options.TalosVersion))
+	}
+
 	ipxeHandler, err := ipxe.NewHandler(ctx, configServerEnabled, imageFactoryClient, ipxe.HandlerOptions{
 		APIAdvertiseAddress: s.options.APIAdvertiseAddress,
 		APIPort:             s.options.APIPort,
