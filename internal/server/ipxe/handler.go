@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-// Package ipxe provides iPXE functionality.
 package ipxe
 
 import (
@@ -145,7 +144,7 @@ func (handler *Handler) consoleKernelArgs(arch string) []string {
 }
 
 // NewHandler creates a new iPXE server.
-func NewHandler(configServerEnabled bool, imageFactoryClient ImageFactoryClient, options HandlerOptions, logger *zap.Logger) (*Handler, error) {
+func NewHandler(ctx context.Context, configServerEnabled bool, imageFactoryClient ImageFactoryClient, options HandlerOptions, logger *zap.Logger) (*Handler, error) {
 	initScript, err := buildInitScript(options.APIAdvertiseAddress, options.APIPort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build init script: %w", err)
@@ -153,7 +152,7 @@ func NewHandler(configServerEnabled bool, imageFactoryClient ImageFactoryClient,
 
 	logger.Info("patch iPXE binaries")
 
-	if err = patchBinaries(initScript, logger); err != nil {
+	if err = patchBinaries(ctx, initScript, logger); err != nil {
 		return nil, err
 	}
 

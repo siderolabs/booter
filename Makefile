@@ -1,6 +1,6 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2025-07-27T22:07:41Z by kres a3d02c0.
+# Generated on 2025-10-15T08:36:49Z by kres d315fc0.
 
 # common variables
 
@@ -17,21 +17,21 @@ WITH_RACE ?= false
 REGISTRY ?= ghcr.io
 USERNAME ?= siderolabs
 REGISTRY_AND_USERNAME ?= $(REGISTRY)/$(USERNAME)
-PROTOBUF_GO_VERSION ?= 1.36.6
+PROTOBUF_GO_VERSION ?= 1.36.10
 GRPC_GO_VERSION ?= 1.5.1
-GRPC_GATEWAY_VERSION ?= 2.27.1
+GRPC_GATEWAY_VERSION ?= 2.27.3
 VTPROTOBUF_VERSION ?= 0.6.0
-GOIMPORTS_VERSION ?= 0.34.0
-GOMOCK_VERSION ?= 0.5.2
-DEEPCOPY_VERSION ?= v0.5.6
-GOLANGCILINT_VERSION ?= v2.2.2
-GOFUMPT_VERSION ?= v0.8.0
-GO_VERSION ?= 1.24.5
+GOIMPORTS_VERSION ?= 0.38.0
+GOMOCK_VERSION ?= 0.6.0
+DEEPCOPY_VERSION ?= v0.5.8
+GOLANGCILINT_VERSION ?= v2.5.0
+GOFUMPT_VERSION ?= v0.9.1
+GO_VERSION ?= 1.25.3
 GO_BUILDFLAGS ?=
 GO_LDFLAGS ?=
 CGO_ENABLED ?= 0
 GOTOOLCHAIN ?= local
-GOEXPERIMENT ?= synctest
+GOEXPERIMENT ?=
 TESTPKGS ?= ./...
 KRES_IMAGE ?= ghcr.io/siderolabs/kres:latest
 CONFORMANCE_IMAGE ?= ghcr.io/siderolabs/conform:latest
@@ -72,7 +72,7 @@ COMMON_ARGS += --build-arg=DEEPCOPY_VERSION="$(DEEPCOPY_VERSION)"
 COMMON_ARGS += --build-arg=GOLANGCILINT_VERSION="$(GOLANGCILINT_VERSION)"
 COMMON_ARGS += --build-arg=GOFUMPT_VERSION="$(GOFUMPT_VERSION)"
 COMMON_ARGS += --build-arg=TESTPKGS="$(TESTPKGS)"
-TOOLCHAIN ?= docker.io/golang:1.24-alpine
+TOOLCHAIN ?= docker.io/golang:1.25-alpine
 
 # help menu
 
@@ -169,6 +169,9 @@ generate:  ## Generate .proto definitions.
 lint-golangci-lint:  ## Runs golangci-lint linter.
 	@$(MAKE) target-$@
 
+lint-golangci-lint-fmt:  ## Runs golangci-lint formatter and tries to fix issues automatically.
+	@$(MAKE) local-$@ DEST=.
+
 lint-gofumpt:  ## Runs gofumpt linter.
 	@$(MAKE) target-$@
 
@@ -218,6 +221,9 @@ lint-markdown:  ## Runs markdownlint.
 
 .PHONY: lint
 lint: lint-golangci-lint lint-gofumpt lint-govulncheck lint-markdown  ## Run all linters for the project.
+
+.PHONY: lint-fmt
+lint-fmt: lint-golangci-lint-fmt  ## Run all linter formatters and fix up the source tree.
 
 .PHONY: image-booter
 image-booter:  ## Builds image for booter.

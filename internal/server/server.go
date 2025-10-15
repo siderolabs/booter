@@ -92,7 +92,7 @@ func (s *Server) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to create image factory client: %w", err)
 	}
 
-	ipxeHandler, err := ipxe.NewHandler(configServerEnabled, imageFactoryClient, ipxe.HandlerOptions{
+	ipxeHandler, err := ipxe.NewHandler(ctx, configServerEnabled, imageFactoryClient, ipxe.HandlerOptions{
 		APIAdvertiseAddress: s.options.APIAdvertiseAddress,
 		APIPort:             s.options.APIPort,
 		Extensions:          s.options.Extensions,
