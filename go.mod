@@ -3,25 +3,25 @@ module github.com/siderolabs/booter
 go 1.25.3
 
 replace (
-	github.com/pin/tftp/v3 => github.com/utkuozdemir/pin-tftp/v3 v3.0.0-20241021135417-0dd7dba351ad
+	github.com/pin/tftp/v3 => github.com/utkuozdemir/pin-tftp/v3 e69c06d0f2d4
 
 	// forked go-yaml that introduces RawYAML interface, which can be used to populate YAML fields using bytes
 	// which are then encoded as a valid YAML blocks with proper indentiation
-	gopkg.in/yaml.v3 => github.com/unix4ever/yaml v0.0.0-20220527175918-f17b0f05cf2c
+	gopkg.in/yaml.v3 => github.com/unix4ever/yaml/v2 v2.4.0
 )
 
 require (
-	github.com/cosi-project/runtime v1.10.7
-	github.com/insomniacslk/dhcp v0.0.0-20250417080101-5f8cf70e8c5f
+	github.com/cosi-project/runtime v1.13.0
+	github.com/insomniacslk/dhcp 175e84fbb167
 	github.com/jackpal/gateway v1.1.1
 	github.com/pin/tftp/v3 v3.1.0
-	github.com/siderolabs/gen v0.8.5
-	github.com/siderolabs/image-factory v0.7.6
-	github.com/siderolabs/omni/client v1.0.0
-	github.com/siderolabs/talos/pkg/machinery v1.11.0-beta.0
-	github.com/spf13/cobra v1.9.1
-	go.uber.org/zap v1.27.0
-	golang.org/x/sync v0.16.0
+	github.com/siderolabs/gen v0.8.6
+	github.com/siderolabs/image-factory v0.9.0
+	github.com/siderolabs/omni/client v1.3.4
+	github.com/siderolabs/talos/pkg/machinery v1.11.5
+	github.com/spf13/cobra v1.10.2
+	go.uber.org/zap v1.27.1
+	golang.org/x/sync v0.18.0
 )
 
 require (
