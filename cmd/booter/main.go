@@ -130,7 +130,8 @@ func init() {
 		"The base URL of the image factory.")
 	rootCmd.Flags().StringVar(&serverOptions.ImageFactoryPXEBaseURL, "image-factory-pxe-base-url", serverOptions.ImageFactoryPXEBaseURL,
 		"The base URL of the image factory PXE server.")
-	rootCmd.Flags().BoolVar(&serverOptions.SecureBootEnabled, "secure-boot-enabled", serverOptions.SecureBootEnabled,
+	rootCmd.Flags().BoolVar(
+		&serverOptions.SecureBootEnabled, "secure-boot-enabled", serverOptions.SecureBootEnabled,
 		"Serve secure boot UKI from the iPXE endpoint. The UKI can be used to boot a machine without secure boot, but it is required to boot a machine with secure boot.",
 	)
 

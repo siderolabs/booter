@@ -36,14 +36,18 @@ func GetConnectionOptions(ctx context.Context, apiEndpoint string, insecureSkipT
 		return ConnectionOptions{}, fmt.Errorf("failed to build Omni API client: %w", err)
 	}
 
+	defer omniClient.Close() //nolint:errcheck
+
 	st := omniClient.Omni().State()
 
+	//nolint:staticcheck
 	connectionParams, err := safe.StateGetByID[*siderolink.ConnectionParams](ctx, st, siderolink.ConfigID)
 	if err != nil {
 		return ConnectionOptions{}, fmt.Errorf("failed to get Omni connection params: %w", err)
 	}
 
-	logger.Info("fetched Omni connection parameters",
+	logger.Info(
+		"fetched Omni connection parameters",
 		zap.String("api_endpoint", connectionParams.TypedSpec().Value.ApiEndpoint),
 		zap.Int("events_port", int(connectionParams.TypedSpec().Value.EventsPort)),
 		zap.Int("kmsg_log_port", int(connectionParams.TypedSpec().Value.LogsPort)),

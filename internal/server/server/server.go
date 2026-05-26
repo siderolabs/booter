@@ -92,7 +92,8 @@ func newMuxHandler(configHandler, ipxeHandler http.Handler, logger *zap.Logger) 
 
 			next.ServeHTTP(w, req)
 
-			logger.Info("request",
+			logger.Info(
+				"request",
 				zap.String("method", req.Method),
 				zap.String("path", req.URL.Path),
 				zap.Duration("duration", time.Since(start)),

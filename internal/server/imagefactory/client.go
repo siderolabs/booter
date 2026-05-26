@@ -63,7 +63,7 @@ func (c *Client) EnsureSchematic(ctx context.Context, extensions, extraKernelArg
 
 	logger.Debug("generated schematic", zap.String("schematic", string(marshaled)))
 
-	schematicID, err := c.factoryClient.SchematicCreate(ctx, sch)
+	schematicID, _, err := c.factoryClient.SchematicCreate(ctx, sch)
 	if err != nil {
 		return "", fmt.Errorf("failed to create schematic: %w", err)
 	}
@@ -102,6 +102,7 @@ func (c *Client) GetLatestStableVersion(ctx context.Context) (string, error) {
 	}
 
 	var latestStable *semver.Version
+
 	for _, v := range versions {
 		sv, err := semver.ParseTolerant(v)
 		if err != nil {

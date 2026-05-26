@@ -62,7 +62,8 @@ func (s *Server) Run(ctx context.Context) error {
 
 	configServerEnabled := s.options.Omni.APIEndpoint != ""
 
-	s.logger.Info("starting server",
+	s.logger.Info(
+		"starting server",
 		zap.Any("options", s.options),
 	)
 
