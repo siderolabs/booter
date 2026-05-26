@@ -61,7 +61,12 @@ func initLogger() (*zap.Logger, error) {
 		loggerConfig.Level.SetLevel(zap.InfoLevel)
 	}
 
-	return loggerConfig.Build(zap.AddStacktrace(zapcore.FatalLevel)) // only print stack traces for fatal errors)
+	logger, err := loggerConfig.Build(zap.AddStacktrace(zapcore.FatalLevel)) // only print stack traces for fatal errors
+	if err != nil {
+		return nil, err
+	}
+
+	return logger.Named(version.Name), nil
 }
 
 func run(ctx context.Context, args []string, logger *zap.Logger) error {
@@ -137,6 +142,9 @@ func init() {
 
 	rootCmd.Flags().BoolVar(&serverOptions.DisableDHCPProxy, "disable-dhcp-proxy", serverOptions.DisableDHCPProxy,
 		"Disable the DHCP proxy server.")
+	rootCmd.Flags().BoolVar(&serverOptions.DisableDHCPProxyBroadcast, "disable-dhcp-proxy-broadcast", serverOptions.DisableDHCPProxyBroadcast,
+		"Disable the DHCP proxy broadcast listener on port 67. When set, the proxy only listens on port 4011 for direct PXE requests. "+
+			"Use this when booter runs on the same host as the DHCP server.")
 
 	rootCmd.Flags().StringVar(&serverOptions.SchematicID, "schematic-id", serverOptions.SchematicID,
 		"The ID of the schematic to use.")

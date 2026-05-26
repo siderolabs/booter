@@ -84,7 +84,7 @@ func newMuxHandler(configHandler, ipxeHandler http.Handler, logger *zap.Logger) 
 	}
 
 	mux.Handle(fmt.Sprintf("/%s/{script}", constants.IPXEURLPath), ipxeHandler)
-	mux.Handle("/tftp/", http.StripPrefix("/tftp/", http.FileServer(http.Dir(constants.IPXEPath+"/"))))
+	mux.Handle("/tftp/", http.StripPrefix("/tftp/", http.FileServer(http.Dir(constants.TFTPPath+"/"))))
 
 	loggingMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

@@ -8,19 +8,20 @@ import "github.com/siderolabs/booter/internal/server/omni"
 
 // Options contains the server options.
 type Options struct {
-	ImageFactoryBaseURL    string
-	ImageFactoryPXEBaseURL string
-	APIListenAddress       string
-	APIAdvertiseAddress    string
-	DHCPProxyIfaceOrIP     string
-	TalosVersion           string
-	ExtraKernelArgs        string
-	SchematicID            string
-	Extensions             []string
-	Omni                   omni.Options
-	APIPort                int
-	DisableDHCPProxy       bool
-	SecureBootEnabled      bool
+	ImageFactoryBaseURL       string
+	ImageFactoryPXEBaseURL    string
+	APIListenAddress          string
+	APIAdvertiseAddress       string
+	DHCPProxyIfaceOrIP        string
+	TalosVersion              string
+	ExtraKernelArgs           string
+	SchematicID               string
+	Extensions                []string
+	Omni                      omni.Options
+	APIPort                   int
+	DisableDHCPProxy          bool
+	DisableDHCPProxyBroadcast bool
+	SecureBootEnabled         bool
 }
 
 // DefaultOptions returns the default server options.

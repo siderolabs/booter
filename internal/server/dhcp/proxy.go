@@ -19,47 +19,86 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const (
+	// Port67 is the standard DHCP server port, used for broadcast DHCPDISCOVER.
+	Port67 = 67
+	// Port4011 is the PXE proxy DHCP port, used for unicast DHCPREQUEST.
+	Port4011 = 4011
+)
+
 // Proxy is a DHCP proxy server, adding PXE boot options to the DHCP responses.
 type Proxy struct {
-	logger              *zap.Logger
-	apiAdvertiseAddress string
-	proxyIfaceOrIP      string
-	apiPort             int
+	logger                   *zap.Logger
+	apiAdvertiseAddress      string
+	proxyIfaceOrIP           string
+	apiPort                  int
+	disableBroadcastListener bool
 }
 
 // NewProxy creates a new DHCP proxy server.
-func NewProxy(apiAdvertiseAddress string, apiPort int, proxyIfaceOrIP string, logger *zap.Logger) *Proxy {
+func NewProxy(apiAdvertiseAddress string, apiPort int, proxyIfaceOrIP string, disableBroadcastListener bool, logger *zap.Logger) *Proxy {
 	return &Proxy{
-		apiAdvertiseAddress: apiAdvertiseAddress,
-		apiPort:             apiPort,
-		proxyIfaceOrIP:      proxyIfaceOrIP,
-		logger:              logger,
+		apiAdvertiseAddress:      apiAdvertiseAddress,
+		apiPort:                  apiPort,
+		proxyIfaceOrIP:           proxyIfaceOrIP,
+		disableBroadcastListener: disableBroadcastListener,
+		logger:                   logger,
 	}
 }
 
-// Run starts the DHCP proxy server.
+// Run starts the DHCP proxy server on port 67 and port 4011.
+//
+// Per the PXE specification (section 2.5.1.1), the redirection service must be prepared
+// to receive DHCPDISCOVER on port 67 and DHCPREQUEST on port 4011.
+//
+// Port 67 handles the broadcast DHCPDISCOVER from PXE clients and responds with DHCPOFFER.
+// Port 4011 handles the unicast DHCPREQUEST from PXE clients that follow the two-phase
+// proxy DHCP flow, and responds with DHCPACK.
+//
+// When disableBroadcastListener is true, only port 4011 is used. This is for deployments
+// where booter runs on the same host as the DHCP server and cannot bind to port 67.
 func (p *Proxy) Run(ctx context.Context) error {
 	iface, err := p.determineInterface(p.proxyIfaceOrIP)
 	if err != nil {
 		return fmt.Errorf("failed to determine interface: %w", err)
 	}
 
-	p.logger.Info("starting the DHCP proxy", zap.String("interface", iface))
+	eg, ctx := errgroup.WithContext(ctx)
 
-	server, err := server4.NewServer(iface, nil, p.handlePacket())
+	if !p.disableBroadcastListener {
+		p.logger.Info("starting DHCP proxy broadcast listener on port 67", zap.String("interface", iface))
+
+		eg.Go(func() error {
+			return p.runServer(ctx, iface, Port67)
+		})
+	}
+
+	p.logger.Info("starting DHCP proxy direct listener on port 4011", zap.String("interface", iface))
+
+	eg.Go(func() error {
+		return p.runServer(ctx, iface, Port4011)
+	})
+
+	return eg.Wait()
+}
+
+func (p *Proxy) runServer(ctx context.Context, iface string, port int) error {
+	laddr := &net.UDPAddr{Port: port}
+
+	server, err := server4.NewServer(iface, laddr, p.handlePacket(port))
 	if err != nil {
-		return fmt.Errorf("failed to create DHCP server: %w", err)
+		return fmt.Errorf("failed to create DHCP server on port %d: %w", port, err)
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
-		if err = server.Serve(); err != nil {
-			if errors.Is(err, net.ErrClosed) {
+		if serveErr := server.Serve(); serveErr != nil {
+			if errors.Is(serveErr, net.ErrClosed) {
 				return nil
 			}
 
-			return fmt.Errorf("failed to run DHCP server: %w", err)
+			return fmt.Errorf("failed to run DHCP server on port %d: %w", port, serveErr)
 		}
 
 		return nil
@@ -116,11 +155,11 @@ func (p *Proxy) determineInterface(ifaceOrIP string) (string, error) {
 	return "", fmt.Errorf("no interface found for: %s", ifaceOrIP)
 }
 
-func (p *Proxy) handlePacket() func(conn net.PacketConn, peer net.Addr, m *dhcpv4.DHCPv4) {
+func (p *Proxy) handlePacket(port int) func(conn net.PacketConn, peer net.Addr, m *dhcpv4.DHCPv4) {
 	return func(conn net.PacketConn, peer net.Addr, m *dhcpv4.DHCPv4) {
-		logger := p.logger.With(zap.String("source", m.ClientHWAddr.String()))
+		logger := p.logger.With(zap.String("source", m.ClientHWAddr.String()), zap.Int("port", port))
 
-		if err := isBootDHCP(m); err != nil {
+		if err := isBootDHCP(m, port); err != nil {
 			logger.Debug("ignoring packet", zap.Error(err))
 
 			return
@@ -133,14 +172,14 @@ func (p *Proxy) handlePacket() func(conn net.PacketConn, peer net.Addr, m *dhcpv
 			return
 		}
 
-		resp, err := offerDHCP(m, p.apiAdvertiseAddress, p.apiPort, fwtype)
+		resp, err := offerDHCP(m, p.apiAdvertiseAddress, p.apiPort, fwtype, port)
 		if err != nil {
-			logger.Error("failed to construct ProxyDHCP offer", zap.Error(err))
+			logger.Error("failed to construct ProxyDHCP response", zap.Error(err))
 
 			return
 		}
 
-		logger.Info("offering boot response", zap.String("boot_filename", resp.BootFileNameOption()))
+		logger.Info("offering boot response", zap.String("boot_filename", resp.BootFileNameOption()), zap.String("message_type", resp.MessageType().String()))
 
 		_, err = conn.WriteTo(resp.ToBytes(), peer)
 		if err != nil {
@@ -149,9 +188,23 @@ func (p *Proxy) handlePacket() func(conn net.PacketConn, peer net.Addr, m *dhcpv
 	}
 }
 
-func isBootDHCP(pkt *dhcpv4.DHCPv4) error {
-	if pkt.MessageType() != dhcpv4.MessageTypeDiscover {
-		return fmt.Errorf("packet is %s, not %s", pkt.MessageType(), dhcpv4.MessageTypeDiscover)
+// isBootDHCP checks if the packet is a PXE boot DHCP packet appropriate for the given port.
+//
+// Per the PXE spec (section 2.5.1.1, page 35):
+//   - Port 67 receives DHCPDISCOVER (broadcast from PXE clients)
+//   - Port 4011 receives DHCPREQUEST (unicast/direct from PXE clients in the two-phase flow)
+func isBootDHCP(pkt *dhcpv4.DHCPv4, port int) error {
+	var expectedType dhcpv4.MessageType
+
+	switch port {
+	case Port4011:
+		expectedType = dhcpv4.MessageTypeRequest
+	default:
+		expectedType = dhcpv4.MessageTypeDiscover
+	}
+
+	if pkt.MessageType() != expectedType {
+		return fmt.Errorf("packet is %s, not %s", pkt.MessageType(), expectedType)
 	}
 
 	if pkt.Options[93] == nil {
@@ -217,11 +270,29 @@ func validateDHCP(m *dhcpv4.DHCPv4) (fwtype Firmware, err error) {
 	return fwtype, nil
 }
 
-func offerDHCP(req *dhcpv4.DHCPv4, apiAdvertiseAddress string, apiPort int, fwtype Firmware) (*dhcpv4.DHCPv4, error) {
+// offerDHCP constructs the DHCP response for a PXE boot request.
+//
+// On port 67, this is a DHCPOFFER in response to DHCPDISCOVER.
+// On port 4011, this is a DHCPACK in response to DHCPREQUEST.
+func offerDHCP(req *dhcpv4.DHCPv4, apiAdvertiseAddress string, apiPort int, fwtype Firmware, port int) (*dhcpv4.DHCPv4, error) {
 	serverIP := net.ParseIP(apiAdvertiseAddress)
+	if serverIP == nil {
+		return nil, fmt.Errorf("invalid API advertise address %q: not a valid IP", apiAdvertiseAddress)
+	}
+
 	ipPort := net.JoinHostPort(serverIP.String(), strconv.Itoa(apiPort))
 
+	var replyType dhcpv4.MessageType
+
+	switch port {
+	case Port4011:
+		replyType = dhcpv4.MessageTypeAck
+	default:
+		replyType = dhcpv4.MessageTypeOffer
+	}
+
 	modifiers := []dhcpv4.Modifier{
+		dhcpv4.WithMessageType(replyType),
 		dhcpv4.WithServerIP(serverIP),
 		dhcpv4.WithOptionCopied(req, dhcpv4.OptionClientMachineIdentifier),
 		dhcpv4.WithOptionCopied(req, dhcpv4.OptionClassIdentifier),
@@ -239,9 +310,11 @@ func offerDHCP(req *dhcpv4.DHCPv4, apiAdvertiseAddress string, apiPort int, fwty
 		resp.UpdateOption(dhcpv4.OptClassIdentifier("PXEClient"))
 	}
 
-	// For TFTP firmware types, the boot filename is also written to the BOOTP `file` header field
-	// in addition to DHCP option 67. U-Boot's ProxyDHCP code path reads the filename from the header
-	// directly and never processes DHCP options, so without this the BOOTP file field would be empty.
+	// For the standard PXE TFTP firmware types below, the boot filename is also written to the BOOTP
+	// `file` header field in addition to DHCP option 67. U-Boot's ProxyDHCP code path reads the filename
+	// from the header directly and never processes DHCP options, so without this the BOOTP file field
+	// would be empty. iPXE and HTTP-boot firmwares are not included here since they process DHCP options
+	// correctly.
 	switch fwtype {
 	case FirmwareX86PC:
 		// This is completely standard PXE: just load a file from TFTP.
@@ -250,7 +323,12 @@ func offerDHCP(req *dhcpv4.DHCPv4, apiAdvertiseAddress string, apiPort int, fwty
 		resp.UpdateOption(dhcpv4.OptBootFileName(resp.BootFileName))
 	case FirmwareX86Ipxe:
 		// Almost standard PXE, but the boot filename needs to be a URL.
-		resp.UpdateOption(dhcpv4.OptBootFileName(fmt.Sprintf("tftp://%s/undionly.kpxe", serverIP)))
+		urlHost := serverIP.String()
+		if serverIP.To4() == nil { // IPv6 host must be bracketed in a URL authority per RFC 3986
+			urlHost = "[" + urlHost + "]"
+		}
+
+		resp.UpdateOption(dhcpv4.OptBootFileName(fmt.Sprintf("tftp://%s/undionly.kpxe", urlHost)))
 	case FirmwareX86EFI:
 		// This is completely standard PXE: just load a file from TFTP.
 		resp.UpdateOption(dhcpv4.OptTFTPServerName(serverIP.String()))

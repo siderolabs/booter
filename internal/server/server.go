@@ -123,7 +123,8 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	if !s.options.DisableDHCPProxy {
-		dhcpProxy := dhcp.NewProxy(s.options.APIAdvertiseAddress, s.options.APIPort, s.options.DHCPProxyIfaceOrIP, s.logger.With(zap.String("component", "dhcp_proxy")))
+		dhcpProxy := dhcp.NewProxy(s.options.APIAdvertiseAddress, s.options.APIPort,
+			s.options.DHCPProxyIfaceOrIP, s.options.DisableDHCPProxyBroadcast, s.logger.With(zap.String("component", "dhcp_proxy")))
 
 		components = append(components, component{dhcpProxy.Run, "DHCP proxy"})
 	}
