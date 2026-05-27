@@ -82,13 +82,13 @@ func (s *Server) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to build machine config: %w", err)
 		}
 
-		if configHandler, err = config.NewHandler(machineConfig, s.logger.With(zap.String("component", "config_handler"))); err != nil {
+		if configHandler, err = config.NewHandler(machineConfig, s.logger.Named("config_handler")); err != nil {
 			return fmt.Errorf("failed to create config handler: %w", err)
 		}
 	}
 
 	imageFactoryClient, err := imagefactory.NewClient(s.options.ImageFactoryBaseURL, s.options.ImageFactoryPXEBaseURL,
-		s.options.SecureBootEnabled, s.logger.With(zap.String("component", "image_factory_client")))
+		s.options.SecureBootEnabled, s.logger.Named("image_factory_client"))
 	if err != nil {
 		return fmt.Errorf("failed to create image factory client: %w", err)
 	}
@@ -109,24 +109,24 @@ func (s *Server) Run(ctx context.Context) error {
 		ExtraKernelArgs:     s.options.ExtraKernelArgs,
 		TalosVersion:        s.options.TalosVersion,
 		SchematicID:         s.options.SchematicID,
-	}, s.logger.With(zap.String("component", "ipxe_handler")))
+	}, s.logger.Named("ipxe_handler"))
 	if err != nil {
 		return fmt.Errorf("failed to create iPXE handler: %w", err)
 	}
 
-	tftpServer := tftp.NewServer(s.options.APIListenAddress, s.logger.With(zap.String("component", "tftp_server")))
-	srvr := server.New(ctx, s.options.APIListenAddress, s.options.APIPort, configHandler, ipxeHandler, s.logger.With(zap.String("component", "server")))
+	tftpServer := tftp.NewServer(s.options.APIListenAddress, s.logger.Named("tftp_server"))
+	srvr := server.New(ctx, s.options.APIListenAddress, s.options.APIPort, configHandler, ipxeHandler, s.logger.Named("server"))
 
 	components := []component{
 		{srvr.Run, "server"},
-		{tftpServer.Run, "TFTP server"},
+		{tftpServer.Run, "tftp_server"},
 	}
 
 	if !s.options.DisableDHCPProxy {
 		dhcpProxy := dhcp.NewProxy(s.options.APIAdvertiseAddress, s.options.APIPort,
-			s.options.DHCPProxyIfaceOrIP, s.options.DisableDHCPProxyBroadcast, s.logger.With(zap.String("component", "dhcp_proxy")))
+			s.options.DHCPProxyIfaceOrIP, s.options.DisableDHCPProxyBroadcast, s.logger.Named("dhcp_proxy"))
 
-		components = append(components, component{dhcpProxy.Run, "DHCP proxy"})
+		components = append(components, component{dhcpProxy.Run, "dhcp_proxy"})
 	}
 
 	return s.runComponents(ctx, components)
@@ -147,7 +147,7 @@ func (s *Server) runComponents(ctx context.Context, components []component) erro
 	eg, ctx := errgroup.WithContext(ctx)
 
 	for _, comp := range components {
-		logger := s.logger.With(zap.String("component", comp.name))
+		logger := s.logger.Named(comp.name)
 
 		eg.Go(func() error {
 			defer cancel() // cancel the parent context, so all other components are also stopped even if this one does not return an error
