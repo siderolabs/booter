@@ -6,44 +6,42 @@
 package tftp
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net"
-	"os"
-	"path/filepath"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/pin/tftp/v3"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/siderolabs/booter/internal/server/constants"
-	"github.com/siderolabs/booter/internal/util"
 )
 
-// Server represents the TFTP server serving iPXE binaries.
+// Server represents the TFTP server serving iPXE binaries from memory.
 type Server struct {
 	logger *zap.Logger
+
+	files map[string][]byte
 
 	listenAddress string
 }
 
-// NewServer creates a new TFTP server.
-func NewServer(listenAddress string, logger *zap.Logger) *Server {
+// NewServer creates a new TFTP server serving the given files, keyed by the request path.
+func NewServer(listenAddress string, files map[string][]byte, logger *zap.Logger) *Server {
 	return &Server{
 		listenAddress: listenAddress,
+		files:         files,
 		logger:        logger,
 	}
 }
 
 // Run runs the TFTP server.
 func (s *Server) Run(ctx context.Context) error {
-	if err := os.MkdirAll(constants.TFTPPath, 0o777); err != nil {
-		return err
-	}
-
 	readHandler := func(filename string, rf io.ReaderFrom) error {
-		return handleRead(filename, rf, s.logger)
+		return s.handleRead(filename, rf)
 	}
 
 	srv := tftp.NewServer(readHandler, nil)
@@ -74,58 +72,28 @@ func (s *Server) Run(ctx context.Context) error {
 	return eg.Wait()
 }
 
-// cleanPath makes a path safe for use with filepath.Join. This is done by not
-// only cleaning the path, but also (if the path is relative) adding a leading
-// '/' and cleaning it (then removing the leading '/'). This ensures that a
-// path resulting from prepending another path will always resolve to lexically
-// be a subdirectory of the prefixed path. This is all done lexically, so paths
-// that include symlinks won't be safe as a result of using CleanPath.
-func cleanPath(path string) string {
-	// Deal with empty strings nicely.
-	if path == "" {
-		return ""
-	}
-
-	// Ensure that all paths are cleaned (especially problematic ones like
-	// "/../../../../../" which can cause lots of issues).
-	path = filepath.Clean(path)
-
-	// If the path isn't absolute, we need to do more processing to fix paths
-	// such as "../../../../<etc>/some/path". We also shouldn't convert absolute
-	// paths to relative ones.
-	if !filepath.IsAbs(path) {
-		path = filepath.Clean(string(os.PathSeparator) + path)
-		// This can't fail, as (by definition) all paths are relative to root.
-		path, _ = filepath.Rel(string(os.PathSeparator), path) //nolint:errcheck
-	}
-
-	// Clean the path again for good measure.
-	return filepath.Clean(path)
-}
-
 // handleRead is called when a client starts file download from server.
-func handleRead(filename string, rf io.ReaderFrom, logger *zap.Logger) error {
-	logger.Info("file requested", zap.String("filename", filename))
+func (s *Server) handleRead(filename string, rf io.ReaderFrom) error {
+	s.logger.Info("file requested", zap.String("filename", filename))
 
-	filename = filepath.Join(constants.TFTPPath, cleanPath(filename))
+	// normalize the request lexically, so both "snp.efi" and "/amd64/../snp.efi" resolve to the same key
+	name := strings.TrimPrefix(path.Clean("/"+filename), "/")
 
-	file, err := os.Open(filename)
+	contents, ok := s.files[name]
+	if !ok {
+		s.logger.Error("file not found", zap.String("filename", filename))
+
+		return fmt.Errorf("file %q not found", filename)
+	}
+
+	n, err := rf.ReadFrom(bytes.NewReader(contents))
 	if err != nil {
-		logger.Error("failed to open file", zap.String("filename", filename), zap.Error(err))
+		s.logger.Error("failed to send file", zap.String("filename", filename), zap.Error(err))
 
 		return err
 	}
 
-	defer util.LogClose(file, logger)
-
-	n, err := rf.ReadFrom(file)
-	if err != nil {
-		logger.Error("failed to read from file", zap.String("filename", filename), zap.Error(err))
-
-		return err
-	}
-
-	logger.Info("file sent", zap.String("filename", filename), zap.Int64("bytes", n))
+	s.logger.Info("file sent", zap.String("filename", filename), zap.Int64("bytes", n))
 
 	return nil
 }

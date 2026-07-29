@@ -102,7 +102,7 @@ func (s *Server) Run(ctx context.Context) error {
 			zap.String("version", s.options.TalosVersion))
 	}
 
-	ipxeHandler, err := ipxe.NewHandler(ctx, configServerEnabled, imageFactoryClient, ipxe.HandlerOptions{
+	ipxeHandler, err := ipxe.NewHandler(configServerEnabled, imageFactoryClient, ipxe.HandlerOptions{
 		APIAdvertiseAddress: s.options.APIAdvertiseAddress,
 		APIPort:             s.options.APIPort,
 		Extensions:          s.options.Extensions,
@@ -114,8 +114,8 @@ func (s *Server) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to create iPXE handler: %w", err)
 	}
 
-	tftpServer := tftp.NewServer(s.options.APIListenAddress, s.logger.Named("tftp_server"))
-	srvr := server.New(ctx, s.options.APIListenAddress, s.options.APIPort, configHandler, ipxeHandler, s.logger.Named("server"))
+	tftpServer := tftp.NewServer(s.options.APIListenAddress, ipxeHandler.PatchedFiles(), s.logger.Named("tftp_server"))
+	srvr := server.New(ctx, s.options.APIListenAddress, s.options.APIPort, configHandler, ipxeHandler, ipxeHandler.PatchedFiles(), s.logger.Named("server"))
 
 	components := []component{
 		{srvr.Run, "server"},

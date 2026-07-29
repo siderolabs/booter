@@ -55,6 +55,7 @@ type HandlerOptions struct {
 type Handler struct {
 	imageFactoryClient ImageFactoryClient
 	logger             *zap.Logger
+	files              map[string][]byte
 	kernelArgs         []string
 	initScript         []byte
 	options            HandlerOptions
@@ -158,7 +159,7 @@ func (handler *Handler) consoleKernelArgs(arch string) []string {
 }
 
 // NewHandler creates a new iPXE server.
-func NewHandler(ctx context.Context, configServerEnabled bool, imageFactoryClient ImageFactoryClient, options HandlerOptions, logger *zap.Logger) (*Handler, error) {
+func NewHandler(configServerEnabled bool, imageFactoryClient ImageFactoryClient, options HandlerOptions, logger *zap.Logger) (*Handler, error) {
 	apiHostPort := net.JoinHostPort(options.APIAdvertiseAddress, strconv.Itoa(options.APIPort))
 	talosConfigURL := fmt.Sprintf("http://%s/config?u=${uuid}", apiHostPort)
 	talosConfigKernelArg := fmt.Sprintf("%s=%s", constants.KernelParamConfig, talosConfigURL)
@@ -181,7 +182,8 @@ func NewHandler(ctx context.Context, configServerEnabled bool, imageFactoryClien
 
 	logger.Info("patch iPXE binaries")
 
-	if err = patchBinaries(ctx, initScript, logger); err != nil {
+	files, err := patchBinaries(initScript)
+	if err != nil {
 		return nil, err
 	}
 
@@ -198,8 +200,15 @@ func NewHandler(ctx context.Context, configServerEnabled bool, imageFactoryClien
 	return &Handler{
 		imageFactoryClient: imageFactoryClient,
 		options:            options,
+		files:              files,
 		kernelArgs:         kernelArgs,
 		initScript:         initScript,
 		logger:             logger,
 	}, nil
+}
+
+// PatchedFiles returns the patched iPXE binaries to be served over TFTP and HTTP, keyed by the names
+// they are served under.
+func (handler *Handler) PatchedFiles() map[string][]byte {
+	return handler.files
 }

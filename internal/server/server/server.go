@@ -6,12 +6,15 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -27,10 +30,10 @@ type Server struct {
 }
 
 // New creates a new server.
-func New(ctx context.Context, listenAddress string, port int, configHandler, ipxeHandler http.Handler, logger *zap.Logger) *Server {
+func New(ctx context.Context, listenAddress string, port int, configHandler, ipxeHandler http.Handler, files map[string][]byte, logger *zap.Logger) *Server {
 	httpServer := &http.Server{
 		Addr:    net.JoinHostPort(listenAddress, strconv.Itoa(port)),
-		Handler: newMuxHandler(configHandler, ipxeHandler, logger),
+		Handler: newMuxHandler(configHandler, ipxeHandler, files, logger),
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
 		},
@@ -76,7 +79,7 @@ func (s *Server) shutdownOnCancel(ctx context.Context, server *http.Server) erro
 	return nil
 }
 
-func newMuxHandler(configHandler, ipxeHandler http.Handler, logger *zap.Logger) http.Handler {
+func newMuxHandler(configHandler, ipxeHandler http.Handler, files map[string][]byte, logger *zap.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	if configHandler != nil {
@@ -84,7 +87,7 @@ func newMuxHandler(configHandler, ipxeHandler http.Handler, logger *zap.Logger) 
 	}
 
 	mux.Handle(fmt.Sprintf("/%s/{script}", constants.IPXEURLPath), ipxeHandler)
-	mux.Handle("/tftp/", http.StripPrefix("/tftp/", http.FileServer(http.Dir(constants.TFTPPath+"/"))))
+	mux.Handle("/tftp/", http.StripPrefix("/tftp/", filesHandler(files)))
 
 	loggingMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -102,4 +105,21 @@ func newMuxHandler(configHandler, ipxeHandler http.Handler, logger *zap.Logger) 
 	}
 
 	return loggingMiddleware(mux)
+}
+
+// filesHandler serves the given in-memory files, keyed by the request path.
+func filesHandler(files map[string][]byte) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		contents, ok := files[strings.TrimPrefix(path.Clean("/"+req.URL.Path), "/")]
+		if !ok {
+			http.NotFound(w, req)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/octet-stream")
+
+		// ServeContent handles HEAD, range, and conditional requests, and sets Content-Length.
+		http.ServeContent(w, req, "", time.Time{}, bytes.NewReader(contents))
+	})
 }

@@ -6,19 +6,25 @@ package ipxe
 
 import (
 	"bytes"
-	"context"
-	"errors"
+	"embed"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"text/template"
 
-	"go.uber.org/zap"
+	"github.com/siderolabs/go-zbin/zbin"
 
 	"github.com/siderolabs/booter/internal/server/constants"
-	"github.com/siderolabs/booter/internal/util"
 )
+
+// dataFS holds the iPXE binaries embedded into the booter binary.
+//
+// The docker build populates the data directory from the iPXE image stages, and a native build
+// populates it with "make fetch-source-assets". The files are listed explicitly, so a binary can
+// never be built without them.
+//
+//go:embed data/amd64/ipxe.efi data/amd64/snp.efi
+//go:embed data/amd64/kpxe/undionly.kpxe.bin data/amd64/kpxe/undionly.kpxe.zinfo
+//go:embed data/arm64/ipxe.efi data/arm64/snp.efi
+var dataFS embed.FS
 
 // bootTemplate is embedded into iPXE binary when that binary is sent to the node.
 //
@@ -95,46 +101,69 @@ func buildInitScript(endpoint string, port int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// patchBinaries patches iPXE binaries on the fly with the new embedded script.
+// patchBinaries patches the embedded iPXE binaries with the new embedded script and returns them
+// keyed by every name they are served under, over both TFTP and HTTP.
 //
 // This relies on special build in `pkgs/ipxe` where a placeholder iPXE script is embedded.
 // EFI iPXE binaries are uncompressed, so these are patched directly.
-// BIOS amd64 undionly.pxe is compressed, so we instead patch uncompressed version and compress it back using zbin.
-// (zbin is built with iPXE).
-func patchBinaries(ctx context.Context, initScript []byte, logger *zap.Logger) error {
-	for _, name := range []string{"ipxe", "snp"} {
-		if err := patchScript(
-			fmt.Sprintf(constants.IPXEPath+"/amd64/%s.efi", name),
-			fmt.Sprintf(constants.TFTPPath+"/%s.efi", name),
-			initScript,
-		); err != nil {
-			return fmt.Errorf("failed to patch %q: %w", name, err)
+// BIOS amd64 undionly.pxe is compressed, so we instead patch uncompressed version and compress it back.
+func patchBinaries(initScript []byte) (map[string][]byte, error) {
+	files := map[string][]byte{}
+
+	for _, arch := range []struct{ name, suffix string }{
+		{name: "amd64", suffix: ""},
+		{name: "arm64", suffix: "-arm64"},
+	} {
+		for _, name := range []string{"ipxe", "snp"} {
+			source := "data/" + arch.name + "/" + name + ".efi"
+
+			contents, err := dataFS.ReadFile(source)
+			if err != nil {
+				return nil, err
+			}
+
+			patched, err := patchScript(contents, initScript)
+			if err != nil {
+				return nil, fmt.Errorf("failed to patch %q: %w", source, err)
+			}
+
+			// The flat, architecture-suffixed names are used by the TFTP boot file names, and the
+			// per-architecture ones by the HTTP boot URLs handed out by the DHCP proxy.
+			files[name+arch.suffix+".efi"] = patched
+			files[arch.name+"/"+name+".efi"] = patched
 		}
-
-		if err := patchScript(
-			fmt.Sprintf(constants.IPXEPath+"/arm64/%s.efi", name),
-			fmt.Sprintf(constants.TFTPPath+"/%s-arm64.efi", name),
-			initScript,
-		); err != nil {
-			return fmt.Errorf("failed to patch %q: %w", name, err)
-		}
 	}
 
-	if err := patchScript(constants.IPXEPath+"/amd64/kpxe/undionly.kpxe.bin", constants.IPXEPath+"/amd64/kpxe/undionly.kpxe.bin.patched", initScript); err != nil {
-		return fmt.Errorf("failed to patch undionly.kpxe.bin: %w", err)
+	bin, err := dataFS.ReadFile("data/amd64/kpxe/undionly.kpxe.bin")
+	if err != nil {
+		return nil, err
 	}
 
-	if err := compressKPXE(ctx, constants.IPXEPath+"/amd64/kpxe/undionly.kpxe.bin.patched", constants.IPXEPath+"/amd64/kpxe/undionly.kpxe.zinfo",
-		constants.TFTPPath+"/undionly.kpxe", logger); err != nil {
-		return fmt.Errorf("failed to compress undionly.kpxe: %w", err)
+	zinfo, err := dataFS.ReadFile("data/amd64/kpxe/undionly.kpxe.zinfo")
+	if err != nil {
+		return nil, err
 	}
 
-	if err := compressKPXE(ctx, constants.IPXEPath+"/amd64/kpxe/undionly.kpxe.bin.patched", constants.IPXEPath+"/amd64/kpxe/undionly.kpxe.zinfo",
-		constants.TFTPPath+"/undionly.kpxe.0", logger); err != nil {
-		return fmt.Errorf("failed to compress undionly.kpxe.0: %w", err)
+	patched, err := patchScript(bin, initScript)
+	if err != nil {
+		return nil, fmt.Errorf("failed to patch undionly.kpxe.bin: %w", err)
 	}
 
-	return nil
+	compressed, err := zbin.Compress(patched, zinfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compress undionly.kpxe: %w", err)
+	}
+
+	// The go:embed directive accepts zero-length files, and an empty directive stream compresses to an empty
+	// output without an error, which would be served as a "successful" zero-byte boot file.
+	if len(compressed) == 0 {
+		return nil, fmt.Errorf("compressing undionly.kpxe produced an empty file")
+	}
+
+	files["undionly.kpxe"] = compressed
+	files["undionly.kpxe.0"] = compressed
+
+	return files, nil
 }
 
 var (
@@ -142,24 +171,21 @@ var (
 	placeholderEnd   = []byte("# *PLACEHOLDER END*")
 )
 
-func patchScript(source, destination string, script []byte) error {
-	contents, err := os.ReadFile(source)
-	if err != nil {
-		return err
-	}
+func patchScript(contents, script []byte) ([]byte, error) {
+	contents = bytes.Clone(contents) // patch a copy, so the caller's slice is never mutated
 
 	start := bytes.Index(contents, placeholderStart)
 	if start == -1 {
-		return fmt.Errorf("placeholder start not found in %q", source)
+		return nil, fmt.Errorf("placeholder start not found")
 	}
 
 	end := bytes.Index(contents, placeholderEnd)
 	if end == -1 {
-		return fmt.Errorf("placeholder end not found in %q", source)
+		return nil, fmt.Errorf("placeholder end not found")
 	}
 
 	if end < start {
-		return fmt.Errorf("placeholder end before start")
+		return nil, fmt.Errorf("placeholder end before start")
 	}
 
 	end += len(placeholderEnd)
@@ -167,41 +193,12 @@ func patchScript(source, destination string, script []byte) error {
 	length := end - start
 
 	if len(script) > length {
-		return fmt.Errorf("script size %d is larger than placeholder space %d", len(script), length)
+		return nil, fmt.Errorf("script size %d is larger than placeholder space %d", len(script), length)
 	}
 
-	script = append(script, bytes.Repeat([]byte{'\n'}, length-len(script))...)
+	script = append(bytes.Clone(script), bytes.Repeat([]byte{'\n'}, length-len(script))...)
 
 	copy(contents[start:end], script)
 
-	if err = os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
-		return err
-	}
-
-	return os.WriteFile(destination, contents, 0o644)
-}
-
-// compressKPXE is equivalent to: ./util/zbin bin/undionly.kpxe.bin bin/undionly.kpxe.zinfo > bin/undionly.kpxe.zbin.
-func compressKPXE(ctx context.Context, binFile, infoFile, outFile string, logger *zap.Logger) error {
-	out, err := os.Create(outFile)
-	if err != nil {
-		return err
-	}
-
-	defer util.LogClose(out, logger)
-
-	cmd := exec.CommandContext(ctx, "/bin/zbin", binFile, infoFile)
-	cmd.Stdout = out
-
-	err = cmd.Run()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return fmt.Errorf("zbin failed with exit code %d, stderr: %v", exitErr.ExitCode(), string(exitErr.Stderr))
-		}
-
-		return fmt.Errorf("failed to run zbin: %w", err)
-	}
-
-	return nil
+	return contents, nil
 }

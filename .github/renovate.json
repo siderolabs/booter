@@ -8,6 +8,19 @@
         ":semanticCommitScopeDisabled",
         "schedule:earlyMondays"
     ],
+    "customManagers": [
+        {
+            "customType": "regex",
+            "datasourceTemplate": "docker",
+            "versioningTemplate": "docker",
+            "managerFilePatterns": [
+                "/^\\.kres\\.yaml$/"
+            ],
+            "matchStrings": [
+                "ref:\\s*[\"']?(?<depName>[^\\s\"']+):(?<currentValue>[A-Za-z0-9._-]+)[\"']?\\s*$"
+            ]
+        }
+    ],
     "packageRules": [
         {
             "groupName": "dependencies",
