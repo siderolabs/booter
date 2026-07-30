@@ -33,7 +33,7 @@ type Server struct {
 func New(ctx context.Context, listenAddress string, port int, configHandler, ipxeHandler http.Handler, files map[string][]byte, logger *zap.Logger) *Server {
 	httpServer := &http.Server{
 		Addr:    net.JoinHostPort(listenAddress, strconv.Itoa(port)),
-		Handler: newMuxHandler(configHandler, ipxeHandler, files, logger),
+		Handler: NewMuxHandler(configHandler, ipxeHandler, files, logger),
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
 		},
@@ -79,11 +79,13 @@ func (s *Server) shutdownOnCancel(ctx context.Context, server *http.Server) erro
 	return nil
 }
 
-func newMuxHandler(configHandler, ipxeHandler http.Handler, files map[string][]byte, logger *zap.Logger) http.Handler {
+// NewMuxHandler creates the HTTP handler that multiplexes the config, the iPXE scripts, and the
+// boot file serving.
+func NewMuxHandler(configHandler, ipxeHandler http.Handler, files map[string][]byte, logger *zap.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	if configHandler != nil {
-		mux.Handle("/config", configHandler)
+		mux.Handle("/"+constants.ConfigURLPath, configHandler)
 	}
 
 	mux.Handle(fmt.Sprintf("/%s/{script}", constants.IPXEURLPath), ipxeHandler)

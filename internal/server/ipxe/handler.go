@@ -15,6 +15,8 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	"go.uber.org/zap"
+
+	booterconstants "github.com/siderolabs/booter/internal/server/constants"
 )
 
 const (
@@ -161,7 +163,7 @@ func (handler *Handler) consoleKernelArgs(arch string) []string {
 // NewHandler creates a new iPXE server.
 func NewHandler(configServerEnabled bool, imageFactoryClient ImageFactoryClient, options HandlerOptions, logger *zap.Logger) (*Handler, error) {
 	apiHostPort := net.JoinHostPort(options.APIAdvertiseAddress, strconv.Itoa(options.APIPort))
-	talosConfigURL := fmt.Sprintf("http://%s/config?u=${uuid}", apiHostPort)
+	talosConfigURL := fmt.Sprintf("http://%s/%s?u=${uuid}", apiHostPort, booterconstants.ConfigURLPath)
 	talosConfigKernelArg := fmt.Sprintf("%s=%s", constants.KernelParamConfig, talosConfigURL)
 
 	if options.SchematicID != "" {

@@ -172,7 +172,7 @@ func (p *Proxy) handlePacket(port int) func(conn net.PacketConn, peer net.Addr, 
 			return
 		}
 
-		resp, err := offerDHCP(m, p.apiAdvertiseAddress, p.apiPort, fwtype, port)
+		resp, err := OfferDHCP(m, p.apiAdvertiseAddress, p.apiPort, fwtype, port)
 		if err != nil {
 			logger.Error("failed to construct ProxyDHCP response", zap.Error(err))
 
@@ -270,11 +270,11 @@ func validateDHCP(m *dhcpv4.DHCPv4) (fwtype Firmware, err error) {
 	return fwtype, nil
 }
 
-// offerDHCP constructs the DHCP response for a PXE boot request.
+// OfferDHCP constructs the DHCP response for a PXE boot request.
 //
 // On port 67, this is a DHCPOFFER in response to DHCPDISCOVER.
 // On port 4011, this is a DHCPACK in response to DHCPREQUEST.
-func offerDHCP(req *dhcpv4.DHCPv4, apiAdvertiseAddress string, apiPort int, fwtype Firmware, port int) (*dhcpv4.DHCPv4, error) {
+func OfferDHCP(req *dhcpv4.DHCPv4, apiAdvertiseAddress string, apiPort int, fwtype Firmware, port int) (*dhcpv4.DHCPv4, error) {
 	serverIP := net.ParseIP(apiAdvertiseAddress)
 	if serverIP == nil {
 		return nil, fmt.Errorf("invalid API advertise address %q: not a valid IP", apiAdvertiseAddress)
