@@ -296,6 +296,11 @@ func OfferDHCP(req *dhcpv4.DHCPv4, apiAdvertiseAddress string, apiPort int, fwty
 		dhcpv4.WithServerIP(serverIP),
 		dhcpv4.WithOptionCopied(req, dhcpv4.OptionClientMachineIdentifier),
 		dhcpv4.WithOptionCopied(req, dhcpv4.OptionClassIdentifier),
+		// RFC 2131 (table 3) requires the server identifier (option 54) in every DHCPOFFER and DHCPACK, and the PXE
+		// specification lists it in the proxyDHCP offer as well. EDK2-based UEFI firmware (most vendor PXE stacks and
+		// OVMF) drops an offer without it before its PXE code even looks at it, so the machine never requests the boot
+		// file and fails with PXE-E16.
+		dhcpv4.WithOption(dhcpv4.OptServerIdentifier(serverIP)),
 	}
 
 	resp, err := dhcpv4.NewReplyFromRequest(
