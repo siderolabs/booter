@@ -5,7 +5,7 @@ spec:
 kind: common.SourceAssets
 spec:
   images:
-    - ref: ghcr.io/siderolabs/ipxe:v1.11.0
+    - ref: ghcr.io/siderolabs/ipxe:v1.15.0-alpha.0-63-g6e225ae
       copies:
         - platform: linux/amd64
           source: /usr/libexec/ipxe.efi
