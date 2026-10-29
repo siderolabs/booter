@@ -6,21 +6,18 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
-	"path"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/siderolabs/omni-infra-provider-bare-metal/pkg/config"
+	"github.com/siderolabs/omni-infra-provider-bare-metal/pkg/ipxe"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/siderolabs/booter/internal/server/constants"
 )
 
 // Server represents the HTTP server.
@@ -85,11 +82,11 @@ func NewMuxHandler(configHandler, ipxeHandler http.Handler, files map[string][]b
 	mux := http.NewServeMux()
 
 	if configHandler != nil {
-		mux.Handle("/"+constants.ConfigURLPath, configHandler)
+		mux.Handle("/"+config.URLPath, configHandler)
 	}
 
-	mux.Handle(fmt.Sprintf("/%s/{script}", constants.IPXEURLPath), ipxeHandler)
-	mux.Handle("/tftp/", http.StripPrefix("/tftp/", filesHandler(files)))
+	mux.Handle("/"+ipxe.ScriptsURLPath+"/", ipxeHandler)
+	mux.Handle("/"+ipxe.FilesURLPath+"/", ipxe.FilesHandler(files))
 
 	loggingMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -107,21 +104,4 @@ func NewMuxHandler(configHandler, ipxeHandler http.Handler, files map[string][]b
 	}
 
 	return loggingMiddleware(mux)
-}
-
-// filesHandler serves the given in-memory files, keyed by the request path.
-func filesHandler(files map[string][]byte) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		contents, ok := files[strings.TrimPrefix(path.Clean("/"+req.URL.Path), "/")]
-		if !ok {
-			http.NotFound(w, req)
-
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/octet-stream")
-
-		// ServeContent handles HEAD, range, and conditional requests, and sets Content-Length.
-		http.ServeContent(w, req, "", time.Time{}, bytes.NewReader(contents))
-	})
 }

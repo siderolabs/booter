@@ -11,17 +11,18 @@ import (
 	"net/http"
 
 	"github.com/jackpal/gateway"
+	"github.com/siderolabs/omni-infra-provider-bare-metal/pkg/config"
+	"github.com/siderolabs/omni-infra-provider-bare-metal/pkg/dhcp"
+	pkgipxe "github.com/siderolabs/omni-infra-provider-bare-metal/pkg/ipxe"
+	"github.com/siderolabs/omni-infra-provider-bare-metal/pkg/tftp"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/siderolabs/booter/internal/server/config"
-	"github.com/siderolabs/booter/internal/server/dhcp"
 	"github.com/siderolabs/booter/internal/server/imagefactory"
 	"github.com/siderolabs/booter/internal/server/ipxe"
 	"github.com/siderolabs/booter/internal/server/machineconfig"
 	"github.com/siderolabs/booter/internal/server/omni"
 	"github.com/siderolabs/booter/internal/server/server"
-	"github.com/siderolabs/booter/internal/server/tftp"
 )
 
 // OmniEndpointEnvVar is the environment variable that contains the Omni endpoint.
@@ -82,9 +83,7 @@ func (s *Server) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to build machine config: %w", err)
 		}
 
-		if configHandler, err = config.NewHandler(machineConfig, s.logger.Named("config_handler")); err != nil {
-			return fmt.Errorf("failed to create config handler: %w", err)
-		}
+		configHandler = config.NewHandler(machineConfig, s.logger.Named("config_handler"))
 	}
 
 	imageFactoryClient, err := imagefactory.NewClient(s.options.ImageFactoryBaseURL, s.options.ImageFactoryPXEBaseURL,
@@ -115,7 +114,8 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	tftpServer := tftp.NewServer(s.options.APIListenAddress, ipxeHandler.PatchedFiles(), s.logger.Named("tftp_server"))
-	srvr := server.New(ctx, s.options.APIListenAddress, s.options.APIPort, configHandler, ipxeHandler, ipxeHandler.PatchedFiles(), s.logger.Named("server"))
+	scriptsHandler := pkgipxe.ScriptsHandler(ipxeHandler.InitScript(), ipxeHandler)
+	srvr := server.New(ctx, s.options.APIListenAddress, s.options.APIPort, configHandler, scriptsHandler, ipxeHandler.PatchedFiles(), s.logger.Named("server"))
 
 	components := []component{
 		{srvr.Run, "server"},

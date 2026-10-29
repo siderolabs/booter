@@ -7,16 +7,13 @@ package ipxe
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
 
-	"github.com/siderolabs/talos/pkg/machinery/constants"
+	"github.com/siderolabs/omni-infra-provider-bare-metal/pkg/config"
+	pkgipxe "github.com/siderolabs/omni-infra-provider-bare-metal/pkg/ipxe"
 	"go.uber.org/zap"
-
-	booterconstants "github.com/siderolabs/booter/internal/server/constants"
 )
 
 const (
@@ -25,16 +22,6 @@ chain --replace %s
 `
 	archArm64 = "arm64"
 	archAmd64 = "amd64"
-
-	// initScriptName is the name of the iPXE init script served by the HTTP server.
-	//
-	// Some UEFIs with built-in iPXE require the script URL to be in the form of a filename ending with ".ipxe", hence we serve it under this path.
-	initScriptName = "init.ipxe"
-
-	// bootScriptName is the name of the iPXE boot script served by the HTTP server.
-	//
-	// Some UEFIs with built-in iPXE require the script URL to be in the form of a filename ending with ".ipxe", hence we serve it under this path.
-	bootScriptName = "boot.ipxe"
 )
 
 // ImageFactoryClient represents an image factory client which ensures a schematic exists on image factory, and returns the PXE URL to it.
@@ -63,26 +50,12 @@ type Handler struct {
 	options            HandlerOptions
 }
 
-// ServeHTTP serves the iPXE request.
+// ServeHTTP serves the iPXE boot script request, with the Talos boot script from the image factory.
 //
-// URL pattern: http://ip-of-this-server:50042/ipxe/boot.ipxe?uuid=${uuid}&mac=${net${idx}/mac:hexhyp}&domain=${domain}&hostname=${hostname}&serial=${serial}&arch=${buildarch}
+// URL pattern: http://ip-of-this-server:50084/ipxe/boot.ipxe?uuid=${uuid}&mac=${net${idx}/mac:hexhyp}&domain=${domain}&hostname=${hostname}&serial=${serial}&arch=${buildarch}
 //
 // Implements http.Handler interface.
 func (handler *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	switch req.PathValue("script") {
-	default:
-		handler.logger.Error("invalid iPXE script", zap.String("script", req.PathValue("script")))
-
-		w.WriteHeader(http.StatusNotFound)
-
-		return
-	case initScriptName:
-		handler.handleInitScript(w)
-
-		return
-	case bootScriptName:
-	}
-
 	ctx := req.Context()
 	query := req.URL.Query()
 	uuid := query.Get("uuid")
@@ -123,14 +96,6 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (handler *Handler) handleInitScript(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "text/plain")
-
-	if _, err := w.Write(handler.initScript); err != nil {
-		handler.logger.Error("failed to write init script", zap.Error(err))
-	}
-}
-
 func (handler *Handler) bootViaFactoryIPXEScript(ctx context.Context, arch string, kernelArgs []string) (body string, statusCode int, err error) {
 	schematicID := handler.options.SchematicID
 
@@ -162,9 +127,7 @@ func (handler *Handler) consoleKernelArgs(arch string) []string {
 
 // NewHandler creates a new iPXE server.
 func NewHandler(configServerEnabled bool, imageFactoryClient ImageFactoryClient, options HandlerOptions, logger *zap.Logger) (*Handler, error) {
-	apiHostPort := net.JoinHostPort(options.APIAdvertiseAddress, strconv.Itoa(options.APIPort))
-	talosConfigURL := fmt.Sprintf("http://%s/%s?u=${uuid}", apiHostPort, booterconstants.ConfigURLPath)
-	talosConfigKernelArg := fmt.Sprintf("%s=%s", constants.KernelParamConfig, talosConfigURL)
+	talosConfigKernelArg := config.KernelArg(options.APIAdvertiseAddress, options.APIPort)
 
 	if options.SchematicID != "" {
 		if len(options.Extensions) > 0 || len(options.ExtraKernelArgs) > 0 {
@@ -177,14 +140,14 @@ func NewHandler(configServerEnabled bool, imageFactoryClient ImageFactoryClient,
 		}
 	}
 
-	initScript, err := buildInitScript(options.APIAdvertiseAddress, options.APIPort)
+	initScript, err := pkgipxe.BuildInitScript(options.APIAdvertiseAddress, options.APIPort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build init script: %w", err)
 	}
 
 	logger.Info("patch iPXE binaries")
 
-	files, err := patchBinaries(initScript)
+	files, err := pkgipxe.PatchBinaries(binaries(), initScript, nil, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -207,6 +170,11 @@ func NewHandler(configServerEnabled bool, imageFactoryClient ImageFactoryClient,
 		initScript:         initScript,
 		logger:             logger,
 	}, nil
+}
+
+// InitScript returns the iPXE init script embedded into the patched iPXE binaries.
+func (handler *Handler) InitScript() []byte {
+	return handler.initScript
 }
 
 // PatchedFiles returns the patched iPXE binaries to be served over TFTP and HTTP, keyed by the names
