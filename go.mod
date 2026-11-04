@@ -6,9 +6,9 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cosi-project/runtime v1.16.4
 	github.com/jackpal/gateway v1.2.0
-	github.com/siderolabs/image-factory v1.7.2
-	github.com/siderolabs/omni-infra-provider-bare-metal v0.14.2-0.20261029093611-47026ceade31
-	github.com/siderolabs/omni/client v1.13.0
+	github.com/siderolabs/image-factory v1.8.0
+	github.com/siderolabs/omni-infra-provider-bare-metal v0.14.2-0.20261103175713-24deaa0147c4
+	github.com/siderolabs/omni/client v1.13.2
 	github.com/siderolabs/talos/pkg/machinery v1.15.0-alpha.2.0.20261028085643-3ba3d6a5e784
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
@@ -62,7 +62,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/runtime-spec v1.3.0 // indirect
 	github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b // indirect
-	github.com/pierrec/lz4/v4 v4.1.30 // indirect
+	github.com/pierrec/lz4/v4 v4.1.33 // indirect
 	github.com/pin/tftp/v3 v3.2.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20260702190614-8ae5a48058df // indirect

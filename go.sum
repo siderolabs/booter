@@ -185,6 +185,8 @@ github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b h1:OzNsuVdSWGwXvW
 github.com/petermattis/goid v0.0.0-20260918085751-abfca077860b/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
 github.com/pierrec/lz4/v4 v4.1.30 h1:cchX8N2DVP668WkElI9QMwVyoNabLkq1LofDHFeIrdg=
 github.com/pierrec/lz4/v4 v4.1.30/go.mod h1:EoQMVJgeeEOMsCqCzqFm2O0cJvljX2nGZjcRIPL34O4=
+github.com/pierrec/lz4/v4 v4.1.33 h1:GjG1TJ1V4IzKP8L96muuuDNpTwd7D+l2ccXrjAbe014=
+github.com/pierrec/lz4/v4 v4.1.33/go.mod h1:7SE9MC2STkNtL4PIwGhjmyVwvILaGI9/COYQNBhKM/c=
 github.com/pin/tftp/v3 v3.2.0 h1:q6K5G6T0TA7e3wDJsB/7VpD3iaWwVEJD/nEuh3q9Sk0=
 github.com/pin/tftp/v3 v3.2.0/go.mod h1:qc5ySXB5aOS1H6ULneqB4g5nshqV1CgeV/l/M6rEDms=
 github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c h1:+mdjkGKdHQG3305AYmdv1U2eRNDiU2ErMBj1gwrq8eQ=
@@ -220,12 +222,18 @@ github.com/siderolabs/go-zbin v0.1.0 h1:ndubaK+eRW68e7jfTe8v4VmXKV7JGg8HP6POyv1t
 github.com/siderolabs/go-zbin v0.1.0/go.mod h1:shUo0VxDO1KjdbL6t+QZUmx+CJYZI95zf6s7w7dlXWk=
 github.com/siderolabs/image-factory v1.7.2 h1:G+9r5nabaso9urPj4kC84UQrfDyvZiTNw3Crsf4Arkc=
 github.com/siderolabs/image-factory v1.7.2/go.mod h1:l4YZ9IdCfsPoWDWUCN1OPdgyz/TbnmgK1HVi3UM8HnU=
+github.com/siderolabs/image-factory v1.8.0 h1:/TG5AC91X1OUJwMDD1FhgRlNz78biNoio9bzVfmRlVw=
+github.com/siderolabs/image-factory v1.8.0/go.mod h1:nDQbRIkyXCN7n3/DLDdLuPzy2v7F1QjwVuB7X1J6ZBM=
 github.com/siderolabs/net v0.4.0 h1:1bOgVay/ijPkJz4qct98nHsiB/ysLQU0KLoBC4qLm7I=
 github.com/siderolabs/net v0.4.0/go.mod h1:/ibG+Hm9HU27agp5r9Q3eZicEfjquzNzQNux5uEk0kM=
 github.com/siderolabs/omni-infra-provider-bare-metal v0.14.2-0.20261029093611-47026ceade31 h1:qp0zz+W6OoaPTEHK4rlyw/qcP8BnzJpf39ac+oitNms=
 github.com/siderolabs/omni-infra-provider-bare-metal v0.14.2-0.20261029093611-47026ceade31/go.mod h1:AeRWF3SSfpTE0Wiuu5lL7iZTKFuEEXXXhDj493XrfDk=
+github.com/siderolabs/omni-infra-provider-bare-metal v0.14.2-0.20261103175713-24deaa0147c4 h1:kIHWUwSK+wniJLPXa7cQ/qKDACct3NrFmbwVqMX+rcg=
+github.com/siderolabs/omni-infra-provider-bare-metal v0.14.2-0.20261103175713-24deaa0147c4/go.mod h1:AeRWF3SSfpTE0Wiuu5lL7iZTKFuEEXXXhDj493XrfDk=
 github.com/siderolabs/omni/client v1.13.0 h1:TVKrmJN7ZAHhB2WuX7EfCbMS9V0PEoMlonwszSwgCOQ=
 github.com/siderolabs/omni/client v1.13.0/go.mod h1:fFhyJkxygU4PraVcZ+y98LCSTh2ebWFxP5kWYUIAT/4=
+github.com/siderolabs/omni/client v1.13.2 h1:ToWAEFGI2utvx4GIyjU30zNJ/N295kVzxMeW5oainPs=
+github.com/siderolabs/omni/client v1.13.2/go.mod h1:fFhyJkxygU4PraVcZ+y98LCSTh2ebWFxP5kWYUIAT/4=
 github.com/siderolabs/proto-codec v0.1.4 h1:AcrLot/251qAa35GYhSqDeEKF3bygOlNaYJSrl7MPNQ=
 github.com/siderolabs/proto-codec v0.1.4/go.mod h1:frX2VEBSrZwzGxEdT+AMSjiWr6ySY/rCSXJxD0z9kxQ=
 github.com/siderolabs/protoenc v0.2.4 h1:D3Fpn2nQSQOhl8ZlAxijZAf7K6F8CM1uZq0afIGsr8Q=
